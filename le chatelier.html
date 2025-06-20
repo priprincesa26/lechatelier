@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Le Chatelier - Simulação Interativa Completa</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+    <style>
+        :root {
+            --cor-rosa: #e74c8c; --cor-roxa: #9b59b6; --cor-azul: #3498db; --cor-verde: #2ecc71;
+            --fundo: #1a1c20; --surface: #25282e; --texto-principal: #e1e3e6;
+            --texto-secundario: #8a919e; --borda: #3a3f4b; --sombra: rgba(0, 0, 0, 0.2);
+            --cor-erro: #e74c3c;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--fundo); color: var(--texto-principal); display: flex; justify-content: center; align-items: center; }
+        .app-wrapper { width: 100%; height: 100%; display: flex; padding: 40px; gap: 40px; }
+        .simulation-column { flex: 1.5; display: flex; flex-direction: column; gap: 20px; }
+        .controls-column { flex: 1; background-color: var(--surface); border-radius: 24px; padding: 30px; box-shadow: 0 10px 40px var(--sombra); display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+        
+        #counters-display { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; padding: 10px; position: relative; }
+        #site-title { font-size: 2rem; font-weight: 800; margin-right: 20px; }
+        #info-icon { font-size: 1.8rem; color: var(--texto-secundario); cursor: pointer; transition: color 0.2s; }
+        #info-icon:hover { color: var(--cor-azul); }
+        #info-popup {
+            display: none; position: absolute; top: 100%; left: 0; background: var(--surface);
+            border: 1px solid var(--borda); border-radius: 12px; padding: 20px;
+            box-shadow: 0 8px 30px var(--sombra); z-index: 1010; width: 100%; max-width: 600px;
+            opacity: 0; transform: translateY(-10px); transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        #info-popup.show { opacity: 1; transform: translateY(0); display: block; }
+        #info-popup h3 { margin-bottom: 15px; border-bottom: 1px solid var(--borda); padding-bottom: 10px; }
+        #info-popup table { width: 100%; border-collapse: collapse; }
+        #info-popup th, #info-popup td { padding: 12px; text-align: left; border-bottom: 1px solid var(--borda); }
+        #info-popup th { font-weight: 700; } #info-popup tr:last-child td { border-bottom: none; }
+        .counter-item { display: flex; align-items: center; gap: 15px; font-size: 1.6rem; font-weight: 700; }
+        .counter-ball { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 -4px 6px rgba(0,0,0,0.15); }
+        .counter-value { min-width: 35px; text-align: left; }
+        
+        #physics-container { flex-grow: 1; width: 100%; border: 3px solid var(--borda); border-radius: 24px; position: relative; cursor: grab; background: var(--fundo); }
+        .reaction-area { position: relative; padding-top: 90px; }
+        .arrow-indicator { height: 80px; font-size: 7rem; font-weight: 800; opacity: 0; transform: scale(0.3); pointer-events: none; color: var(--cor-roxa); transition: opacity 0.6s ease-out, transform 1.2s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; justify-content: center; position: absolute; top: 0; left: 0; right: 0; }
+        .arrow-indicator.show { opacity: 1; transform: scale(1); }
+        .reaction-display { font-weight: 500; display: flex; justify-content: center; align-items: flex-end; gap: 18px; padding: 25px; width: 100%; background-color: var(--fundo); border-radius: 16px; white-space: nowrap; overflow-x: auto; }
+        .reaction-side { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .side-label { font-size: 0.9rem; font-weight: 700; color: var(--texto-secundario); text-transform: uppercase; }
+        .species-group { display: flex; align-items: center; gap: 18px; font-size: 1.5rem; }
+        .species-label { display: flex; align-items: center; gap: 10px; }
+        .species-ball { width: 25px; height: 25px; border-radius: 50%; }
+        .ball-rosa { background-color: var(--cor-rosa); } .ball-roxa { background-color: var(--cor-roxa); } .ball-azul { background-color: var(--cor-azul); } .ball-verde { background-color: var(--cor-verde); }
+        .equilibrium-arrow-container { display: flex; flex-direction: column; align-items: center; gap: 2px; padding-bottom: 5px; }
+        .equilibrium-arrow { font-size: 2rem; color: var(--texto-secundario); }
+        .enthalpy-label { font-size: 0.8rem; font-weight: bold; padding: 2px 6px; border-radius: 4px; color: white; opacity: 0; transition: opacity 0.3s; }
+        .enthalpy-label.show { opacity: 1; }
+        .endo { background-color: var(--cor-azul); } .exo { background-color: var(--cor-erro); }
+        
+        .main-controls-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex-grow: 1; min-height: 0; }
+        .factors-wrapper { display: flex; flex-direction: column; gap: 20px; }
+        .explanation-panel { background-color: var(--fundo); border-radius: 16px; padding: 25px; display: flex; flex-direction: column; justify-content: center; }
+        .explanation-content { opacity: 0; transition: opacity 0.4s ease; }
+        .explanation-content.show { opacity: 1; }
+        .explanation-panel h3 { margin-bottom: 15px; }
+        .explanation-panel p { color: var(--texto-secundario); line-height: 1.6; font-size: 1.1em; }
+        
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .actions button { padding: 15px; font-size: 1.1em; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; color: white; display:flex; align-items:center; justify-content: center; gap: 10px;}
+        #reset-btn { background-color: var(--cor-azul); grid-column: 1 / -1; }
+        #state-btn { background-color: var(--cor-roxa); } #enthalpy-btn { background-color: #f39c12; }
+        
+        .factor-control { padding: 20px; background: var(--fundo); border-radius: 16px; }
+        .factor-control h3 { text-align: center; margin-bottom: 15px; }
+        .controls { display: grid; grid-template-columns: auto 1fr auto auto; gap: 15px; align-items: center; }
+        .control-ball { grid-column: 1 / 2; }
+        .control-label { grid-column: 2 / 3; font-size: 1.1rem; font-weight: 500; }
+        .btn-add { grid-column: 3 / 4; } .btn-remove { grid-column: 4 / 5; }
+        .control-btn { font-size: 1.2rem; padding: 10px 15px; border-radius: 10px; border: 2px solid var(--borda); cursor: pointer; background-color: var(--surface); }
+        
+        .barometer { display: flex; align-items: center; gap: 15px; }
+        .meter-container { flex-grow: 1; height: 30px; background: var(--borda); border-radius: 8px; overflow: hidden; }
+        #pressure-bar-fill, #thermometer-fill { height: 100%; width: 50%; transition: width 0.3s ease; }
+        #pressure-bar-fill { background: linear-gradient(90deg, var(--cor-azul), var(--cor-roxa)); }
+        #thermometer-fill { background: linear-gradient(90deg, #f39c12, var(--cor-erro)); }
+        .meter-btn { font-size: 1.5rem; width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--borda); background: var(--surface); cursor: pointer; }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+        .modal-overlay.show { opacity: 1; pointer-events: all; display: flex; }
+        .modal-panel { background: var(--surface); padding: 40px; border-radius: 24px; box-shadow: 0 10px 50px rgba(0,0,0,0.3); width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 25px; transform: scale(0.95); transition: transform 0.3s ease; }
+        .modal-overlay.show .modal-panel { transform: scale(1); }
+        .modal-panel h2 { margin-bottom: 10px; } .selection-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .checkbox-card { cursor: pointer; background: var(--fundo); padding: 20px; border-radius: 12px; border: 2px solid var(--borda); display: flex; align-items: center; gap: 15px; transition: all 0.2s ease; }
+        .checkbox-card:hover { border-color: var(--cor-roxa); transform: translateY(-2px); }
+        .checkbox-card input { display: none; }
+        .custom-checkbox { width: 25px; height: 25px; border: 2px solid var(--borda); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+        .custom-checkbox .fa-check { opacity: 0; transform: scale(0.5); transition: all 0.2s ease; }
+        .checkbox-card input:checked + .custom-checkbox { background: var(--cor-roxa); border-color: var(--cor-roxa); }
+        .checkbox-card input:checked + .custom-checkbox .fa-check { opacity: 1; transform: scale(1); }
+        .checkbox-card .card-content { display: flex; flex-direction: column; }
+        .checkbox-card .card-title { font-size: 1.2rem; font-weight: 700; }
+        .checkbox-card .card-subtitle { font-size: 1rem; color: var(--texto-secundario); }
+        .actions-btn { padding: 15px; font-size: 1.1em; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; color: white; }
+        .actions button:hover:not(:disabled), .control-btn:hover:not(:disabled), .meter-btn:hover:not(:disabled), .actions-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 15px var(--sombra); }
+        
+        @media (max-width: 1400px) { .app-wrapper { flex-direction: column; height: auto; overflow-y: auto; } #physics-container { min-height: 50vh; } }
+        @media (max-width: 768px) { .main-controls-wrapper { grid-template-columns: 1fr; } .actions { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="modal-overlay" id="state-modal">
+        <div class="modal-panel">
+            <h2>Definir Estados da Matéria</h2><p>Marque as espécies que devem se comportar como gases.</p>
+            <div class="selection-group" id="state-selection-list"></div>
+            <button id="apply-states-btn" class="actions-btn" style="background-color:var(--cor-roxa);">Aplicar Estados</button>
+        </div>
+    </div>
+    <div class="modal-overlay" id="enthalpy-modal">
+        <div class="modal-panel">
+            <h2>Definir Entalpia da Reação</h2><p>Clique em "Inverter" para definir qual sentido absorve calor (endotérmico).</p>
+            <div id="modal-reaction-display" class="reaction-display"></div>
+            <div style="display:flex; gap: 15px;">
+                <button id="invert-enthalpy-btn" class="actions-btn" style="background-color:#555; flex-grow:1;">Inverter ↔️</button>
+                <button id="apply-enthalpy-btn" class="actions-btn" style="background-color:var(--cor-roxa); flex-grow:2;">Aplicar Entalpia</button>
+            </div>
+        </div>
+    </div>
+    <div class="app-wrapper">
+        <div class="simulation-column">
+            <div id="counters-display"></div>
+            <div id="physics-container"></div>
+        </div>
+        <div class="controls-column">
+            <div class="reaction-area">
+                <div id="arrow-indicator" class="arrow-indicator">→</div>
+                <div id="main-reaction-display" class="reaction-display"></div>
+            </div>
+            <div class="actions">
+                 <button id="state-btn"><i class="fa-solid fa-atom"></i> Estados</button>
+                 <button id="enthalpy-btn"><i class="fa-solid fa-temperature-three-quarters"></i> Entalpia</button>
+                 <button id="reset-btn"><i class="fa-solid fa-arrows-rotate"></i> Resetar</button>
+            </div>
+            <div class="factors-wrapper">
+                 <div class="factor-control" id="pressure-control-container">
+                    <h3>Pressão</h3>
+                    <div class="barometer">
+                        <button class="meter-btn pressure-btn" id="decrease-pressure">-</button>
+                        <div class="meter-container" id="pressure-bar-container"><div id="pressure-bar-fill"></div></div>
+                        <button class="meter-btn pressure-btn" id="increase-pressure">+</button>
+                    </div>
+                </div>
+                <div class="factor-control" id="temp-control-container">
+                    <h3>Temperatura</h3>
+                    <div class="barometer">
+                        <button class="meter-btn temp-btn" id="decrease-temp">-</button>
+                        <div class="meter-container" id="thermometer-container"><div id="thermometer-fill"></div></div>
+                        <button class="meter-btn temp-btn" id="increase-temp">+</button>
+                    </div>
+                </div>
+            </div>
+            <div class="main-controls-wrapper">
+                <div class="factor-control controls"></div>
+                <div class="explanation-panel" id="explanation-panel">
+                    <div class="explanation-content">
+                        <h3 id="exp-action"></h3>
+                        <p id="exp-details"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BALL_RADIUS = 45;
+        const INITIAL_COUNT = 10;
+        let engine, render, runner, isActionInProgress = false;
+        
+        const bodiesInWorld = { rosa: [], roxa: [], azul: [], verde: [] };
+        const speciesConfig = {
+            rosa: { name: 'Rosa' }, roxa: { name: 'Roxa' },
+            azul: { name: 'Azul' }, verde: { name: 'Verde' }
+        };
+        const actionsData = {};
+        const speciesStates = { rosa: false, roxa: false, azul: false, verde: false };
+        let pressureLevel = 5;
+        let temperatureLevel = 5;
+        let endoDirection = null;
+        let modalEndoDirection = 'direita';
+
+        const physicsContainer = document.getElementById('physics-container');
+        const arrowIndicator = document.getElementById('arrow-indicator');
+
+        function populateUI() {
+            const countersDisplay = document.getElementById('counters-display');
+            const mainReactionDisplay = document.getElementById('main-reaction-display');
+            const modalReactionDisplay = document.getElementById('modal-reaction-display');
+            const controls = document.querySelector('.controls');
+            const stateSelectionList = document.getElementById('state-selection-list');
+            
+            countersDisplay.innerHTML = `<h1 id="site-title">Le Chatelier</h1><i id="info-icon" class="fa-solid fa-circle-info"></i>` + Object.keys(speciesConfig).map(key => `<div class="counter-item"><div class="counter-ball ball-${key}"></div><span id="count-${key}">0</span></div>`).join('') + `<div id="info-popup"><h3>Tabela de Efeitos – Le Chatelier</h3><table><thead><tr><th>Perturbação</th><th>Sentido</th><th>Resultado</th></tr></thead><tbody><tr><td>🔼 Aumento de <strong>reagente</strong></td><td>Direita (→)</td><td>Produz mais produto</td></tr><tr><td>🔼 Aumento de <strong>produto</strong></td><td>Esquerda (←)</td><td>Produz mais reagente</td></tr><tr><td>🔽 Diminuição de <strong>reagente</strong></td><td>Esquerda (←)</td><td>Produz mais reagente</td></tr><tr><td>🔽 Diminuição de <strong>produto</strong></td><td>Direita (→)</td><td>Produz mais produto</td></tr><tr><td>🔼 Aumento de <strong>pressão</strong></td><td>Lado com <strong>menos</strong> mols gasosos</td><td>Depende da reação</td></tr><tr><td>🔽 Diminuição de <strong>pressão</strong></td><td>Lado com <strong>mais</strong> mols gasosos</td><td>Depende da reação</td></tr><tr><td>🔼 Aumento da <strong>temperatura</strong></td><td>Sentido <strong>endotérmico</strong></td><td>Absorve calor</td></tr><tr><td>🔽 Diminuição da <strong>temperatura</strong></td><td>Sentido <strong>exotérmico</strong></td><td>Libera calor</td></tr></tbody></table></div>`;
+            
+            const reactionHTML = (idPrefix) => `<div class="reaction-side"><div class="side-label">Reagentes</div><div class="species-group"><span class="species-label"><div class="species-ball ball-rosa"></div>Rosa</span><span>+</span><span class="species-label"><div class="species-ball ball-roxa"></div>Roxa</span></div></div><div class="equilibrium-arrow-container" id="${idPrefix}-arrow-container"><span class="enthalpy-label endo" id="${idPrefix}-label-top"></span><i class="fa-solid fa-right-left equilibrium-arrow"></i><span class="enthalpy-label exo" id="${idPrefix}-label-bottom"></span></div><div class="reaction-side"><div class="side-label">Produtos</div><div class="species-group"><span class="species-label"><div class="species-ball ball-azul"></div>Azul</span><span>+</span><span class="species-label"><div class="species-ball ball-verde"></div>Verde</span></div></div>`;
+            mainReactionDisplay.innerHTML = reactionHTML('main');
+            modalReactionDisplay.innerHTML = reactionHTML('modal');
+
+            controls.innerHTML = Object.keys(speciesConfig).map(key => `<div class="control-ball species-ball ball-${key}"></div><div class="control-label"><span>${speciesConfig[key].name}</span></div><button class="control-btn btn-add" data-action="add_${key}"><i class="fa-solid fa-plus"></i></button><button class="control-btn btn-remove" data-action="remove_${key}"><i class="fa-solid fa-minus"></i></button>`).join('');
+            stateSelectionList.innerHTML = Object.keys(speciesConfig).map(key => `<label class="checkbox-card"><input type="checkbox" id="gas-check-${key}"><div class="custom-checkbox"><i class="fa-solid fa-check"></i></div><div class="card-content"><div class="card-title">Bola ${speciesConfig[key].name}</div><div class="card-subtitle"><i class="fa-solid fa-smog"></i> Comportamento de Gás</div></div></label>`).join('');
+        }
+        
+        function setupPhysics() {
+            const { Engine, Render, Runner, Composite, Mouse, MouseConstraint } = Matter;
+            engine = Engine.create({ gravity: { y: 0.8, scale: 0.001 }, positionIterations: 10, velocityIterations: 8 });
+            render = Render.create({ element: physicsContainer, engine: engine, options: { width: physicsContainer.clientWidth, height: physicsContainer.clientHeight, wireframes: false, background: 'transparent' } });
+            recreateWalls();
+            const mouse = Mouse.create(render.canvas);
+            const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } } });
+            Composite.add(engine.world, mouseConstraint);
+            Render.run(render);
+            runner = Runner.create();
+            Runner.run(runner, engine);
+        }
+
+        function recreateWalls() {
+            const { Bodies, Composite } = Matter;
+            const oldWalls = Composite.allBodies(engine.world).filter(body => body.isWall);
+            Composite.remove(engine.world, oldWalls);
+            const wallThickness = 100;
+            const wallOptions = { isStatic: true, isWall: true, render: { visible: false } };
+            Composite.add(engine.world, [ Bodies.rectangle(render.options.width / 2, -wallThickness / 2, render.options.width * 2, wallThickness, wallOptions), Bodies.rectangle(render.options.width / 2, render.options.height + wallThickness / 2, render.options.width * 2, wallThickness, wallOptions), Bodies.rectangle(-wallThickness / 2, render.options.height / 2, wallThickness, render.options.height * 2, wallOptions), Bodies.rectangle(render.options.width + wallThickness / 2, render.options.height / 2, wallThickness, render.options.height * 2, wallOptions) ]);
+        }
+        
+        function handleResize() { if (!render) return; render.bounds.max.x = physicsContainer.clientWidth; render.bounds.max.y = physicsContainer.clientHeight; render.options.width = physicsContainer.clientWidth; render.options.height = physicsContainer.clientHeight; render.canvas.width = physicsContainer.clientWidth; render.canvas.height = physicsContainer.clientHeight; recreateWalls(); }
+        function setControlsDisabled(disabled) { document.querySelectorAll(".control-btn, .actions button, .meter-btn").forEach(btn => btn.disabled = disabled); }
+        function updateCounters() { for (const species in bodiesInWorld) { document.getElementById(`count-${species}`).textContent = bodiesInWorld[species].length; } }
+        function addBall(species) { const { Bodies, Composite } = Matter; const color = getComputedStyle(document.body).getPropertyValue(`--cor-${species}`).trim(); const xPosition = Math.random() * (render.options.width - 4 * BALL_RADIUS) + 2 * BALL_RADIUS; const ball = Bodies.circle(xPosition, -30, BALL_RADIUS, { restitution: 0.6, friction: 0.1, frictionAir: 0.02, render: { fillStyle: color } }); ball.isGas = speciesStates[species]; ball.render.opacity = ball.isGas ? 0.5 : 1; Composite.add(engine.world, ball); bodiesInWorld[species].push(ball); updateCounters(); }
+        function removeBall(species) { if (bodiesInWorld[species].length === 0) return null; const { Composite, Body } = Matter; const ballToRemove = bodiesInWorld[species].shift(); const shrinkInterval = setInterval(() => { const newOpacity = ballToRemove.render.opacity - 0.05; const newRadius = ballToRemove.circleRadius * 0.95; if (newRadius <= 1) { clearInterval(shrinkInterval); Composite.remove(engine.world, ballToRemove); } else { Body.scale(ballToRemove, 0.95, 0.95); ballToRemove.render.opacity = newOpacity; } }, 20); updateCounters(); return ballToRemove; }
+        
+        function applyStateChanges() {
+            let anyGas = false;
+            for (const species in speciesStates) {
+                const isGas = document.getElementById(`gas-check-${species}`).checked;
+                speciesStates[species] = isGas;
+                if (isGas) anyGas = true;
+                bodiesInWorld[species].forEach(ball => { ball.isGas = isGas; ball.render.opacity = isGas ? 0.5 : 1; });
+            }
+            const pressureControls = document.getElementById('pressure-control-container');
+            pressureControls.style.opacity = anyGas ? 1 : 0.5;
+            pressureControls.querySelectorAll('.pressure-btn').forEach(btn => btn.disabled = !anyGas);
+            document.getElementById('state-modal').classList.remove('show');
+        }
+
+        function updateModalEnthalpyDisplay() {
+            const topLabel = document.getElementById('modal-label-top');
+            const bottomLabel = document.getElementById('modal-label-bottom');
+            if (modalEndoDirection === 'direita') { topLabel.textContent = 'Endotérmico'; topLabel.className = 'enthalpy-label endo show'; bottomLabel.textContent = 'Exotérmico'; bottomLabel.className = 'enthalpy-label exo show'; }
+            else { topLabel.textContent = 'Exotérmico'; topLabel.className = 'enthalpy-label exo show'; bottomLabel.textContent = 'Endotérmico'; bottomLabel.className = 'enthalpy-label endo show'; }
+        }
+
+        function updateMainEnthalpyDisplay() {
+            const topLabel = document.getElementById('main-label-top');
+            const bottomLabel = document.getElementById('main-label-bottom');
+            if (endoDirection) {
+                if (endoDirection === 'direita') { topLabel.textContent = 'Endotérmico'; topLabel.className = 'enthalpy-label endo show'; bottomLabel.textContent = 'Exotérmico'; bottomLabel.className = 'enthalpy-label exo show'; }
+                else { topLabel.textContent = 'Exotérmico'; topLabel.className = 'enthalpy-label exo show'; bottomLabel.textContent = 'Endotérmico'; bottomLabel.className = 'enthalpy-label endo show'; }
+            } else { topLabel.className = 'enthalpy-label endo'; bottomLabel.className = 'enthalpy-label exo'; }
+        }
+        
+        function applyEnthalpyChanges() {
+            endoDirection = modalEndoDirection;
+            updateMainEnthalpyDisplay();
+            const tempControls = document.getElementById('temp-control-container');
+            tempControls.style.opacity = 1;
+            tempControls.querySelectorAll('.temp-btn').forEach(btn => btn.disabled = false);
+            document.getElementById('enthalpy-modal').classList.remove('show');
+        }
+        
+        function updatePressureBar() { document.getElementById('pressure-bar-fill').style.width = `${pressureLevel * 10}%`; }
+        function updateThermometer() { document.getElementById('thermometer-fill').style.width = `${temperatureLevel * 10}%`; }
+        function showExplanation(title, details) { const content = document.querySelector('#explanation-panel .explanation-content'); content.classList.remove('show'); setTimeout(() => { document.getElementById('exp-action').textContent = title; document.getElementById('exp-details').textContent = details; content.classList.add('show'); }, 200); }
+        function showShiftArrow(direction) { arrowIndicator.classList.remove("show"); setTimeout(() => { arrowIndicator.textContent = direction === "direita" ? "→" : "←"; arrowIndicator.classList.add("show"); }, 150); }
+
+        function handlePerturbation(actionKey) {
+            if (isActionInProgress) return;
+            isActionInProgress = true; setControlsDisabled(true);
+            const data = actionsData[actionKey]; const [actionType, species] = actionKey.split("_");
+            try {
+                if (actionType === 'add') { addBall(species); } else if (bodiesInWorld[species].length > 1) { removeBall(species); }
+                setTimeout(() => {
+                    const shift = data.shift;
+                    const consequence = shift === 'direita' ? ', aumentando a concentração de produtos.' : ', consumindo produtos para aumentar a concentração de reagentes.';
+                    if (shift === 'direita') { if (bodiesInWorld.rosa.length > 0 && bodiesInWorld.roxa.length > 0) { removeBall('rosa'); removeBall('roxa'); addBall('azul'); addBall('verde'); } }
+                    else if (bodiesInWorld.azul.length > 0 && bodiesInWorld.verde.length > 0) { removeBall('azul'); removeBall('verde'); addBall('rosa'); addBall('roxa'); }
+                    showShiftArrow(shift);
+                    showExplanation(`1 Bola ${speciesConfig[species].name} ${actionType === 'add' ? 'Adicionada' : 'Removida'}`, data.explanation + consequence);
+                }, 500);
+            } finally { setTimeout(() => { isActionInProgress = false; setControlsDisabled(false); }, 1200); }
+        }
+
+        function handlePressureChange(direction) {
+            if (isActionInProgress) return;
+            const currentGasMolesLeft = (speciesStates.rosa ? bodiesInWorld.rosa.length : 0) + (speciesStates.roxa ? bodiesInWorld.roxa.length : 0);
+            const currentGasMolesRight = (speciesStates.azul ? bodiesInWorld.azul.length : 0) + (speciesStates.verde ? bodiesInWorld.verde.length : 0);
+            if (currentGasMolesLeft === currentGasMolesRight) { const bar = document.getElementById('pressure-bar-container'); bar.style.boxShadow = `0 0 10px 3px var(--cor-erro)`; setTimeout(() => bar.style.boxShadow = 'none', 300); showExplanation("Mudança de Pressão", `Não há efeito. O lado esquerdo possui ${currentGasMolesLeft} mols de gás e o direito possui ${currentGasMolesRight}.`); return; }
+            isActionInProgress = true; setControlsDisabled(true);
+            let shift;
+            if (direction === 'increase') { pressureLevel = Math.min(10, pressureLevel + 1); shift = currentGasMolesLeft < currentGasMolesRight ? 'esquerda' : 'direita'; }
+            else { pressureLevel = Math.max(0, pressureLevel - 1); shift = currentGasMolesLeft > currentGasMolesRight ? 'esquerda' : 'direita'; }
+            updatePressureBar();
+            try { setTimeout(() => { if (shift === 'direita') { if (bodiesInWorld.rosa.length > 0 && bodiesInWorld.roxa.length > 0) { removeBall('rosa'); removeBall('roxa'); addBall('azul'); addBall('verde'); } } else { if (bodiesInWorld.azul.length > 0 && bodiesInWorld.verde.length > 0) { removeBall('azul'); removeBall('verde'); addBall('rosa'); addBall('roxa'); } } showShiftArrow(shift); showExplanation( `Pressão ${direction === 'increase' ? 'Aumentada' : 'Diminuída'}`, `O equilíbrio se desloca para a ${shift} para favorecer o lado com ${direction === 'increase' ? 'MENOR' : 'MAIOR'} volume de gás. (Esquerda: ${currentGasMolesLeft} mols | Direita: ${currentGasMolesRight} mols)` ); }, 500); }
+            finally { setTimeout(() => { isActionInProgress = false; setControlsDisabled(false); }, 1300); }
+        }
+        
+        function handleTemperatureChange(direction) {
+            if (isActionInProgress || !endoDirection) return;
+            isActionInProgress = true; setControlsDisabled(true);
+            let shift;
+            if (direction === 'increase') { temperatureLevel = Math.min(10, temperatureLevel + 1); shift = endoDirection; }
+            else { temperatureLevel = Math.max(0, temperatureLevel - 1); shift = (endoDirection === 'direita' ? 'esquerda' : 'direita'); }
+            updateThermometer();
+            try { setTimeout(() => { if (shift === 'direita') { if (bodiesInWorld.rosa.length > 0 && bodiesInWorld.roxa.length > 0) { removeBall('rosa'); removeBall('roxa'); addBall('azul'); addBall('verde'); } } else { if (bodiesInWorld.azul.length > 0 && bodiesInWorld.verde.length > 0) { removeBall('azul'); removeBall('verde'); addBall('rosa'); addBall('roxa'); } } showShiftArrow(shift); const endoTerm = endoDirection === 'direita' ? 'direto (→)' : 'inverso (←)'; showExplanation( `Temperatura ${direction === 'increase' ? 'Aumentada' : 'Diminuída'}`, `O equilíbrio se desloca no sentido ${direction === 'increase' ? 'endotérmico' : 'exotérmico'}. Neste caso, o sentido endotérmico é o ${endoTerm}.` ); }, 500); }
+            finally { setTimeout(() => { isActionInProgress = false; setControlsDisabled(false); }, 1300); }
+        }
+
+        function resetSimulation() {
+            if(isActionInProgress) return;
+            isActionInProgress = true; setControlsDisabled(true);
+            arrowIndicator.classList.remove("show"); document.querySelector("#explanation-panel .explanation-content").classList.remove("show");
+            const { Composite } = Matter; Object.values(bodiesInWorld).flat().forEach(ball => Composite.remove(engine.world, ball));
+            for (const species in bodiesInWorld) bodiesInWorld[species] = [];
+            updateCounters();
+            for (const key in speciesStates) { speciesStates[key] = false; document.getElementById(`gas-check-${key}`).checked = false; }
+            endoDirection = null; updateMainEnthalpyDisplay();
+            pressureLevel = 5; temperatureLevel = 5; updatePressureBar(); updateThermometer();
+            document.getElementById('pressure-control-container').style.opacity = 0.5; document.querySelectorAll('.pressure-btn').forEach(btn => btn.disabled = true);
+            document.getElementById('temp-control-container').style.opacity = 0.5; document.querySelectorAll('.temp-btn').forEach(btn => btn.disabled = true);
+            for (let i = 0; i < INITIAL_COUNT; i++) { Object.keys(speciesConfig).forEach(species => { setTimeout(() => addBall(species), 60 * i + Math.random() * 50); }); }
+            setTimeout(() => { isActionInProgress = false; setControlsDisabled(false); showExplanation("Bem-vindo(a)!","Use os controles para perturbar o sistema e observar o Princípio de Le Chatelier."); }, 60 * INITIAL_COUNT + 500);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            Object.assign(actionsData, {
+                'add_rosa':  { shift: 'direita',  explanation: 'O excesso de reagente desloca o equilíbrio para a direita' },
+                'add_roxa':  { shift: 'direita',  explanation: 'O excesso de reagente desloca o equilíbrio para a direita' },
+                'add_azul':  { shift: 'esquerda', explanation: 'O excesso de produto desloca o equilíbrio para a esquerda' },
+                'add_verde': { shift: 'esquerda', explanation: 'O excesso de produto desloca o equilíbrio para a esquerda' },
+                'remove_rosa': { shift: 'esquerda', explanation: 'A falta de reagente desloca o equilíbrio para a esquerda' },
+                'remove_roxa': { shift: 'esquerda', explanation: 'A falta de reagente desloca o equilíbrio para a esquerda' },
+                'remove_azul': { shift: 'direita',  explanation: 'A falta de produto desloca o equilíbrio para a direita' },
+                'remove_verde':{ shift: 'direita',  explanation: 'A falta de produto desloca o equilíbrio para a direita' },
+            });
+            populateUI();
+            setupPhysics();
+            resetSimulation();
+            
+            document.querySelector('.controls').addEventListener('click', (e) => { const btn = e.target.closest('.control-btn'); if(btn) handlePerturbation(btn.dataset.action); });
+            document.getElementById('state-btn').addEventListener('click', () => document.getElementById('state-modal').classList.add('show'));
+            document.getElementById('enthalpy-btn').addEventListener('click', () => { updateModalEnthalpyDisplay(); document.getElementById('enthalpy-modal').classList.add('show'); });
+            document.getElementById('invert-enthalpy-btn').addEventListener('click', () => { modalEndoDirection = (modalEndoDirection === 'direita' ? 'esquerda' : 'direita'); updateModalEnthalpyDisplay(); });
+            document.getElementById('apply-states-btn').addEventListener('click', applyStateChanges);
+            document.getElementById('apply-enthalpy-btn').addEventListener('click', applyEnthalpyChanges);
+            document.getElementById('reset-btn').addEventListener('click', resetSimulation);
+            document.getElementById('increase-pressure').addEventListener('click', () => handlePressureChange('increase'));
+            document.getElementById('decrease-pressure').addEventListener('click', () => handlePressureChange('decrease'));
+            document.getElementById('increase-temp').addEventListener('click', () => handleTemperatureChange('increase'));
+            document.getElementById('decrease-temp').addEventListener('click', () => handleTemperatureChange('decrease'));
+            const infoIcon = document.getElementById('info-icon');
+            const infoPopup = document.getElementById('info-popup');
+            infoIcon.addEventListener('click', (e) => { e.stopPropagation(); infoPopup.classList.toggle('show'); });
+            document.addEventListener('click', (e) => { if (!infoPopup.contains(e.target) && e.target !== infoIcon) { infoPopup.classList.remove('show'); } });
+            
+            window.addEventListener('resize', handleResize);
+
+            Matter.Events.on(engine, 'beforeUpdate', () => {
+                const gravity = engine.world.gravity;
+                engine.world.bodies.forEach(body => {
+                    if (body.isGas) {
+                        Matter.Body.applyForce(body, body.position, { x: (Math.random() - 0.5) * 0.002 * body.mass, y: -gravity.y * gravity.scale * body.mass });
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
